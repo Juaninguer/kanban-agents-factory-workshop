@@ -19,6 +19,9 @@
 - Prompt(s) used to run the planner:
 - What was good / bad in the first spec it produced?
 - What did you change in `planner.agent.md` after the first run, and what effect did it have?
+- Prompt(s) used to run the planner: `Plan F1.` (new session, planner agent selected), run twice.
+- What was good / bad in the first spec it produced? Good: PATCH /api/tasks/:id justified, 6 Given/When/Then ACs including 400 and 404 errors, native <select> for keyboard use, only real file paths, no code written. Bad: it planned the e2e tests inside the existing e2e/board.spec.ts instead of a new per-feature file; it left the control's accessible name "implementation-specific", which the tester can't target with getByRole; its 5 "open questions" all had defaults, so they were really assumptions that would wrongly block the implementer.
+- What did you change in `planner.agent.md` after the first run, and what effect did it have? Added a step forcing exact roles/accessible names, a self-check for a new e2e/<ID>-<slug>.spec.ts file and for how e2e state/failures are set up, a separate "Assumptions" section, and a constraint against modifying existing tests. Effect on the second run: e2e tests are now planned in a new e2e/F1-move-task.spec.ts, the control has an exact name (combobox `Move "<title>"`), AC5 explains how to force the failure with Playwright `page.route`, each e2e scenario states its initial board state, and the defaults moved to "Assumptions" with "Open questions: None". Downside: it went from 6 to 5 ACs (it merged "move to every column" into AC1/AC2).
 
 ## Part 2 — Context engineering
 

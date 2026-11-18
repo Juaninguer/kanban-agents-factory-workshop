@@ -2,112 +2,103 @@
 
 ## Summary
 
-Allow a user to change a task's status among `todo`, `doing`, and `done`, so the task moves between the **To do**, **Doing**, and **Done** columns. The API must validate both the task ID and the target status. The primary interaction must be operable with a keyboard.
-
-The API design is a `PATCH /api/tasks/:id` partial-update route with a `status` field, consistent with Express, Zod validation, and the existing resource-oriented `/api/tasks` routes.
+Allow a user to move an existing task to To do, Doing, or Done. The change is enforced by the API and reflected immediately in the board. The control is keyboard operable, so a task can be moved without a mouse.
 
 ## Acceptance criteria
 
-### AC1 — Move an existing task
+### AC1 — Move a task to another column
 
-- **Given** a task exists in the To do column
-- **When** the user moves it to Doing
-- **Then** the task disappears from To do and appears once in Doing
-- **And** a subsequent `GET /api/tasks` reports the same task with `status: "doing"`
+- **Given** a board with a task titled "Write tests" in To do
+- **When** the user chooses Done in the task's move control
+- **Then** "Write tests" appears in the Done column and no longer appears in To do
+- **And** the move is persisted in the server for the life of the running process
 
-### AC2 — Move to every supported column
+### AC2 — Moving is available for every task and keyboard accessible
 
-- **Given** an existing task
-- **When** it is moved between any pair of To do, Doing, and Done
-- **Then** the task is rendered in exactly the selected column and its API representation has the corresponding `todo`, `doing`, or `done` status
+- **Given** a task titled "Write tests" in any column
+- **When** the user focuses the `combobox` named `Move "Write tests"` and changes it using the keyboard
+- **Then** the task moves to the selected column
 
-### AC3 — Reject an unknown task
+### AC3 — Invalid API status is rejected
 
-- **Given** no task exists with ID `missing-id`
-- **When** a client sends `PATCH /api/tasks/missing-id` with a valid status
-- **Then** the API responds with `404` and `{ "error": "NotFound" }`
-- **And** no task is created or changed
+- **Given** a board containing a task
+- **When** `PATCH /api/tasks/:id` is sent with a status other than `todo`, `doing`, or `done`
+- **Then** the API returns 400 with `error: "ValidationError"`
 
-### AC4 — Reject an invalid target status
+### AC4 — Unknown task cannot be moved
 
-- **Given** an existing task
-- **When** a client sends a target status outside `todo`, `doing`, or `done`
-- **Then** the API responds with `400` and `{ "error": "ValidationError", "details": [...] }`
-- **And** the task retains its current status
+- **Given** no task exists with id "missing-task"
+- **When** `PATCH /api/tasks/missing-task` is sent with a valid status
+- **Then** the API returns 404 with `error: "NotFound"`
 
-### AC5 — Keyboard-accessible move control
+### AC5 — UI handles a rejected move
 
-- **Given** a task card is visible
-- **When** a keyboard user focuses the card's move control and changes the selected destination
-- **Then** the task moves to the selected column without pointer interaction
-- **And** the control has an accessible name that identifies the task
-
-### AC6 — Show move failures
-
-- **Given** the API rejects a move
-- **When** the move request fails
-- **Then** the UI keeps the task in its current column and displays an accessible error
-- **And** the move control can be used again
+- **Given** a board whose task is currently in To do
+- **When** the user selects another status and the API rejects the move
+- **Then** the task remains in To do and the UI shows the API error in an accessible `alert`
 
 ## API changes (routes, payloads, status codes, validation rules)
 
-- Add `PATCH /api/tasks/:id`.
-- Request body: `{ "status": "todo" | "doing" | "done" }`.
-- Use Zod to require exactly a supported `status` value. An omitted status or unknown status returns `400 ValidationError`.
-- Return `200` with the complete updated `Task` object on success.
-- Return `404` with `{ "error": "NotFound" }` when the task ID does not exist.
-- Preserve existing fields, creation timestamp, and ordering behavior.
-- If the destination equals the current status, return `200` with the unchanged task.
-- Add a store-level update operation that mutates only the matching task status.
-- Existing `POST /api/tasks`, `GET /api/tasks`, and test reset behavior remain unchanged.
+Use `PATCH /api/tasks/:id` with JSON payload `{ "status": "todo" | "doing" | "done" }`. This is the REST-style route for changing one field of an existing task and matches the existing `/api/tasks` resource.
+
+- Validate the payload with a zod schema derived from `TASK_STATUSES`.
+- Return `200` with the complete updated task.
+- Return `400` with `error: "ValidationError"` and zod details for a missing or invalid `status`.
+- Return `404` with `error: "NotFound"` when the id is unknown.
+- Add a store method to update the task status; preserve the task id, title, and createdAt.
+- Unknown extra payload fields should follow the existing zod object behavior and be rejected only if that behavior is configured; no additional F1 fields are accepted by the product UI.
 
 ## UI changes (components, accessible names / roles, keyboard behaviour)
 
-- Update [web/src/App.tsx](../../web/src/App.tsx) to provide a move-task handler and optimistic state update pattern only if the selected implementation requires it; the final state must be the server-returned updated task.
-- Update [web/src/components/Board.tsx](../../web/src/components/Board.tsx) to pass the move callback to columns.
-- Update [web/src/components/Column.tsx](../../web/src/components/Column.tsx) to pass the move callback to task cards.
-- Update [web/src/components/TaskCard.tsx](../../web/src/components/TaskCard.tsx) to render a native `<select>` with three options labeled To do, Doing, and Done, named for example `Move "Task title"` (the exact accessible name is implementation-specific).
-- Changing the select value invokes the move API call; native keyboard navigation and Enter/Space behavior must remain usable.
-- On success, replace the task in client state with the returned task so it relocates by status.
-- On failure, leave the task where it was and render `role="alert"` feedback. The select value must reflect the task's current status after failure.
-- The move control must not be nested in an interactive element or rely on drag-and-drop.
-- Existing card title and column region accessible names remain available.
+- Add a native `combobox` to each `TaskCard`:
+  - Accessible name: `Move "<task title>"`
+  - Options: `To do`, `Doing`, `Done`
+  - The selected option is the task's current status.
+- Selecting a different option calls `api.moveTask(task.id, status)`.
+- On success, replace the moved task in the shared task state so it appears in the appropriate column.
+- On failure, leave the task state unchanged and show the API error in an existing app-level or task-level `alert`.
+- The native control must be operable with Tab, Arrow keys, and Enter/Escape according to the browser.
+- Preserve visible task title and column semantics.
 
 ## Implementation plan (numbered steps, small enough for one commit each, with file paths)
 
-1. Add a Zod schema for a task status update in [server/src/domain.ts](../../server/src/domain.ts).
-2. Add a store method to find a task by ID and update its status, or a no-op result if it is unchanged, in [server/src/store.ts](../../server/src/store.ts).
-3. Add `PATCH /api/tasks/:id` in [server/src/app.ts](../../server/src/app.ts), including Zod `400` and missing-task `404` handling.
-4. Add `moveTask(id, status)` to [web/src/api.ts](../../web/src/api.ts).
-5. Add a keyboard-operable move select and failure state to [web/src/components/TaskCard.tsx](../../web/src/components/TaskCard.tsx).
-6. Thread the move callback through [web/src/components/Board.tsx](../../web/src/components/Board.tsx), [web/src/components/Column.tsx](../../web/src/components/Column.tsx), and [web/src/App.tsx](../../web/src/App.tsx).
-7. Add API coverage in [server/test/tasks.test.ts](../../server/test/tasks.test.ts).
-8. Add Playwright coverage in [e2e/board.spec.ts](../../e2e/board.spec.ts) using [e2e/fixtures.ts](../../e2e/fixtures.ts) for reset state.
-9. Update card and control styling only in [web/src/styles.css](../../web/src/styles.css), if needed.
+1. Add a zod schema for move payloads and a store update method in [server/src/domain.ts](../../server/src/domain.ts) and [server/src/store.ts](../../server/src/store.ts).
+2. Add `PATCH /api/tasks/:id`, status validation, 404 handling, and response serialization in [server/src/app.ts](../../server/src/app.ts).
+3. Add `moveTask(id, status)` to [web/src/api.ts](../../web/src/api.ts).
+4. Pass a move callback from [web/src/App.tsx](../../web/src/App.tsx) through [web/src/components/Board.tsx](../../web/src/components/Board.tsx) and [web/src/components/Column.tsx](../../web/src/components/Column.tsx) to [web/src/components/TaskCard.tsx](../../web/src/components/TaskCard.tsx).
+5. Add the accessible move combobox and move-error handling in [web/src/components/TaskCard.tsx](../../web/src/components/TaskCard.tsx) and [web/src/App.tsx](../../web/src/App.tsx).
+6. Add API and store coverage to [server/test/tasks.test.ts](../../server/test/tasks.test.ts), without changing existing tests.
+7. Add the F1 Playwright scenarios in **new** [e2e/F1-move-task.spec.ts](../../e2e/F1-move-task.spec.ts).
 
 ## Test plan (which acceptance criteria → unit/API test vs. e2e test)
 
-- **AC1:** API test moves an existing task with `PATCH` and verifies `200`, updated status, and subsequent `GET`; E2E test moves a seeded task and verifies column membership.
-- **AC2:** API test table-covers all supported status values and store methods; E2E test verifies movement among all three columns.
-- **AC3:** API test sends `PATCH /api/tasks/missing-id` and verifies `404` plus `{ "error": "NotFound" }`.
-- **AC4:** API test table-covers omitted status and unsupported values and verifies `400 ValidationError` and unchanged status.
-- **AC5:** E2E test focuses the named move control with the keyboard, changes its value, and verifies the task region moves without pointer interaction.
-- **AC6:** E2E test forces a rejected move or API outage and verifies `role="alert"`, no relocation, and reuse of the control.
+- AC1:
+  - API test in `server/test/tasks.test.ts`: PATCH moves a known task and 200 response contains the new status.
+  - E2E in `e2e/F1-move-task.spec.ts`: initial board state contains "Write tests" in todo, select Done from the move combobox, and verify it leaves To do and appears in Done.
+- AC2:
+  - E2E in `e2e/F1-move-task.spec.ts`: initial board state contains "Write tests" in todo; focus `Move "Write tests"`; use keyboard selection to choose Doing; verify the task appears in Doing.
+- AC3:
+  - API test in `server/test/tasks.test.ts`: PATCH with missing status and unknown status both return 400 `ValidationError`.
+- AC4:
+  - API test in `server/test/tasks.test.ts`: PATCH for "missing-task" with status done returns 404 `NotFound`.
+- AC5:
+  - E2E in `e2e/F1-move-task.spec.ts`: initial board state contains "Write tests" in todo; intercept `PATCH /api/tasks/:id` with Playwright `page.route` and return 404 JSON `{ "error": "NotFound" }`; select Done from `Move "Write tests"`; verify "Write tests" remains in To do and a role `alert` reports `NotFound`.
 
 ## Out of scope
 
-- Drag-and-drop movement.
-- Ordering or ranking tasks within a column.
-- Moving multiple tasks at once.
-- WIP limits.
-- Renaming, deleting, filtering, or prioritizing tasks.
-- Persistence of moves across server restarts.
-- Animations or confirmation dialogs.
+- Drag-and-drop movement
+- WIP limits
+- Moving multiple tasks at once
+- Persistence across server restarts
+- Animation or column transition effects
+
+## Assumptions (decisions taken by default, with a one-line reason each)
+
+- Choosing the task's current status is a no-op from the UI; this avoids an unnecessary PATCH and server update.
+- API moves are processed in memory and remain until the server restart or reset; this follows the existing store model.
+- Native `<select>` is the control type; it provides an exact combobox role and robust keyboard operation without custom interaction code.
+- A rejected move shows the server message in an accessible alert; no rollback is needed because the task state was not optimistically changed.
 
 ## Open questions
 
-- Should dragging cards be added in addition to the keyboard move control? Default: no; native select-only movement is sufficient for F1.
-- Should a move in the UI use an optimistic update or wait for the API response? Default: wait for success and replace client state with the returned task, avoiding a false move on failure.
-- Which exact `PATCH` response field shape should consumers see? Default: return the complete updated `Task` object.
-- Should extra properties in the request body be accepted or rejected? Default: follow Zod's existing object parsing behavior, but do not add new requirements beyond requiring `status`.
-- How should rapid repeated move selections be handled while a request is pending? Default: disable or ignore the control for that card until the request completes; final behavior should prevent stale responses.
+- None. The explicit status values and UI destination options are defined by the backlog and existing task model.
