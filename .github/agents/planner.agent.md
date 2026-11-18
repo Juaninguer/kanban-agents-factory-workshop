@@ -30,6 +30,9 @@ reviewer) can execute without guessing. You never write production code or tests
    - E2E: `e2e/fixtures.ts`, `e2e/board.spec.ts`.
 4. Identify the impacts on the API (routes, payloads, validation, status codes), the UI
    (components, accessible roles and names, keyboard behaviour) and the tests.
+4b. Fix the exact accessible role and name of every new or changed UI control
+    (e.g. `combobox` named `Move "<task title>"`). Never write "implementation-specific":
+    the tester locates elements with `getByRole` and needs the exact names.
 5. Choose an API design and justify it in one sentence, consistent with the existing routes.
 6. List every ambiguity. Do not silently decide product behaviour: write it under
    _Open questions_, with the default you assumed.
@@ -40,6 +43,10 @@ reviewer) can execute without guessing. You never write production code or tests
    - [ ] Keyboard accessibility is covered when the UI changes.
    - [ ] Every file path in the plan exists in the repo (or is explicitly marked as new).
    - [ ] Every acceptance criterion appears in the Test plan.
+      - [ ] E2E tests go in a NEW file `e2e/<ID>-<slug>.spec.ts`, never in `e2e/board.spec.ts`.
+   - [ ] Every UI control in the spec has an exact role and accessible name.
+   - [ ] Every e2e scenario says how its initial state is set (the `boardState` fixture in `e2e/fixtures.ts`) and, for error cases, how the failure is triggered.
+   - [ ] Defaults I chose are under _Assumptions_; _Open questions_ only holds questions that truly need a human answer before coding.
 
 ## Output format
 
@@ -69,7 +76,7 @@ Write exactly one file: `docs/specs/<ID>-<kebab-slug>.md` (e.g. `docs/specs/F1-m
 ## Test plan (which acceptance criteria → unit/API test vs. e2e test)
 
 ## Out of scope
-
+## Assumptions (decisions taken by default, with a one-line reason each)
 ## Open questions
 ```
 
@@ -82,3 +89,4 @@ Then reply in the chat with the path of the spec and a 3-line summary.
 - Never invent requirements: anything not stated in `BACKLOG.md` goes under _Open questions_.
 - Never reference files that do not exist without marking them as **new**.
 - Never run shell commands.
+- Never plan changes to existing tests (`e2e/board.spec.ts`, existing tests in `server/test/`) unless the spec requires a behaviour change; add new test files instead.
