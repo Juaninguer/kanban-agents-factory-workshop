@@ -4,17 +4,16 @@
 > It is graded on honesty and insight, not on how well everything went.
 > Failures, surprises and "the agent did something stupid" moments are the most valuable content.
 
-**Pair:** <!-- Name 1 / Name 2 -->.
-**Repository:** <!-- https://github.com/... -->
+**Pair:** Juan Manzano Rus (solo).
+**Repository:** https://github.com/Juaninguer/kanban-agents-factory-workshop
 
 ---
 
 ## Part 0 — Setup
 
-- Copilot plan and VS Code version:
-- AI credits remaining at the start of the session:
-- Anything that did not work out of the box:
-
+- Copilot plan and VS Code version: Copilot Free (my Student verification is pending), latest VS Code.
+- AI credits remaining at the start of the session: full monthly Copilot Free allowance (not used yet).
+- Anything that did not work out of the box: the repo had no "Use this template" button, so I forked it and enabled GitHub Actions by hand. My Student application was rejected (missing 2FA, billing name and a verified email). `git push` was also refused at first because Git was using another GitHub account's stored credentials; I fixed it by adding that account as a collaborator.
 ## Part 1 — First agent: the Planner
 
 - Prompt(s) used to run the planner:
